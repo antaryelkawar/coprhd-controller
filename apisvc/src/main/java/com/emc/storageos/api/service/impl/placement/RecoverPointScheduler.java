@@ -2099,17 +2099,17 @@ public class RecoverPointScheduler implements Scheduler {
         sourceRecommendation.setSourceStorageSystem(sourceVolume.getStorageController());
         sourceRecommendation.setInternalSiteName(sourceVolume.getInternalSiteName());
         sourceRecommendation.setVirtualArray(sourceVolume.getVirtualArray());
-        sourceRecommendation.setVirtualPool(dbClient.queryObject(VirtualPool.class, sourceVolume.getVirtualPool()));
+        sourceRecommendation.setVirtualPool(vpool);
         sourceRecommendation.setSize(capabilities.getSize());
         sourceRecommendation.setResourceCount(capabilities.getResourceCount());
 
         // Build vplex recommendation of the source if specified
-        VirtualPool sourceVirtualPool = dbClient.queryObject(VirtualPool.class, sourceVolume.getVirtualPool());
-        if (VirtualPool.vPoolSpecifiesHighAvailability(sourceVirtualPool)) {
+        //VirtualPool sourceVirtualPool = dbClient.queryObject(VirtualPool.class, sourceVolume.getVirtualPool());
+        if (VirtualPool.vPoolSpecifiesHighAvailability(vpool)) {
             VPlexRecommendation virtualVolumeRecommendation = new VPlexRecommendation();
             virtualVolumeRecommendation.setVPlexStorageSystem(sourceVolume.getStorageController());
             virtualVolumeRecommendation.setVirtualArray(sourceVolume.getVirtualArray());
-            virtualVolumeRecommendation.setVirtualPool(sourceVirtualPool);
+            virtualVolumeRecommendation.setVirtualPool(vpool);
             // Always force count to 1 for a VPLEX rec for RP. VPLEX uses
             // these recs and they are invoked one at a time even
             // in a multi-volume request.
@@ -2126,8 +2126,8 @@ public class RecoverPointScheduler implements Scheduler {
         }
 
         // build HA recommendation if specified.
-        if (VirtualPool.vPoolSpecifiesMetroPoint(sourceVirtualPool)
-                || VirtualPool.vPoolSpecifiesHighAvailabilityDistributed(sourceVirtualPool)) {
+        if (VirtualPool.vPoolSpecifiesMetroPoint(vpool)
+                || VirtualPool.vPoolSpecifiesHighAvailabilityDistributed(vpool)) {
             RPRecommendation haRec = new RPRecommendation();
             for (String associatedVolume : sourceVolume.getAssociatedVolumes()) {
                 Volume haVolume = dbClient.queryObject(Volume.class, URI.create(associatedVolume));
@@ -2137,7 +2137,7 @@ public class RecoverPointScheduler implements Scheduler {
                     VPlexRecommendation haVirtualRecommendation = new VPlexRecommendation();
                     haVirtualRecommendation.setVPlexStorageSystem(sourceVolume.getStorageController());
                     haVirtualRecommendation.setVirtualArray(sourceVolume.getVirtualArray());
-                    haVirtualRecommendation.setVirtualPool(sourceVirtualPool);
+                    haVirtualRecommendation.setVirtualPool(vpool);
                     haVirtualRecommendation.setSourceStoragePool(haVolume.getPool());
                     haVirtualRecommendation.setSourceStorageSystem(haVolume.getStorageController());
                     // Always force count to 1 for a VPLEX rec for RP. VPLEX uses
@@ -2156,7 +2156,7 @@ public class RecoverPointScheduler implements Scheduler {
         for (VirtualArray protectionVarray : protectionVarrays) {
             RPRecommendation targetRecommendation = new RPRecommendation();
             Volume targetVolume = getTargetVolumeForProtectionVirtualArray(sourceVolume, protectionVarray);
-            VirtualPool targetVpool = protectionSettings.get(protectionVarray.getId()) != null ? dbClient.queryObject(VirtualPool.class, protectionSettings.get(protectionVarray.getId()).getVirtualPool()) : sourceVirtualPool;
+            VirtualPool targetVpool = protectionSettings.get(protectionVarray.getId()) != null ? dbClient.queryObject(VirtualPool.class, protectionSettings.get(protectionVarray.getId()).getVirtualPool()) : vpool;
             targetRecommendation.setInternalSiteName(targetVolume.getInternalSiteName());
             targetRecommendation.setVirtualArray(targetVolume.getVirtualArray());
             targetRecommendation.setVirtualPool(targetVpool);
