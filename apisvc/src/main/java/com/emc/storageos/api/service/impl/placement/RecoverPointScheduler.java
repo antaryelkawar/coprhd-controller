@@ -1929,16 +1929,51 @@ public class RecoverPointScheduler implements Scheduler {
         // not contain the pool information and we would need to fetch it from the backing volumes.
         // JIRA - https://coprhd.atlassian.net/browse/COP-16684
         // Check if the storage pools used by the existing source and its journal are available in the current vpool
-        if (!verifyStoragePoolAvailability(vpool, srcVolume.getPool())) {
-            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
-                    "The storage pool %s used by an existing source volume cannot be used.", cgName, srcVolume.getPool()));
-            return false;
-        } else if (!verifyStoragePoolAvailability(vpool, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool())) {
-            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
-                    "The storage pool %s used by an existing source journal volume cannot be used.",
-                    cgName, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool()));
-            return false;
-        }
+    	
+    	boolean isMetroPoint = VirtualPool.vPoolSpecifiesMetroPoint(vpool);
+    	boolean isRPVplex = VirtualPool.vPoolSpecifiesHighAvailability(vpool);
+    	
+    	if (isRPVplex) {
+    		StringSet associatedVolumes = srcVolume.getAssociatedVolumes();
+    		for (String associatedVolume : associatedVolumes) {
+    			URI srcPool = URI.create(associatedVolume);
+    			if (!verifyStoragePoolAvailability(vpool, srcPool)) {
+    	            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
+    	                    "The storage pool %s used by an existing source volume cannot be used.", cgName, srcPool));
+    	            return false;
+    	        } 
+    		}
+    		
+    		URI activeSrcJournalUri = srcVolume.getRpJournalVolume();    		
+    		if (!verifyStoragePoolAvailability(vpool, dbClient.queryObject(Volume.class, activeSrcJournalUri).getPool())) {
+	            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
+	                    "The storage pool %s used by an existing source journal volume cannot be used.",
+	                    cgName, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool()));
+	            return false;
+	        }
+    		
+    		if (isMetroPoint) {
+    			URI standbySrcJournalUri = srcVolume.getSecondaryRpJournalVolume();
+	    		if (!verifyStoragePoolAvailability(vpool, dbClient.queryObject(Volume.class,standbySrcJournalUri).getPool())) {
+		            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
+		                    "The storage pool %s used by an existing source journal volume cannot be used.",
+		                    cgName, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool()));
+		            return false;
+		        }
+    		}
+    	} else {
+    	
+	        if (!verifyStoragePoolAvailability(vpool, srcVolume.getPool())) {
+	            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
+	                    "The storage pool %s used by an existing source volume cannot be used.", cgName, srcVolume.getPool()));
+	            return false;
+	        } else if (!verifyStoragePoolAvailability(vpool, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool())) {
+	            _log.warn(String.format("Unable to fully align placement with existing volumes in RecoverPoint consistency group %s.  " +
+	                    "The storage pool %s used by an existing source journal volume cannot be used.",
+	                    cgName, dbClient.queryObject(Volume.class, srcVolume.getRpJournalVolume()).getPool()));
+	            return false;
+	        }
+    	}
 
         // Check if the storage pools used by the existing source RP targets and their journals are available in the current vpool
         Iterator<String> targetVolumes = srcVolume.getRpTargets().iterator();
