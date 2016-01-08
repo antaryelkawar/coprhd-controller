@@ -87,7 +87,9 @@
         <package name="GeoIP-data"/>
         <package name="libGeoIP1"/>
         <package name="GeoIP"/>
-        <!--package name="gradle"/-->
+        <package name="curl"/>
+        <package name="bind-libs"/>
+        <package name="bind-utils"/>
         <package name="sipcalc"/>
         <package name="python-cjson"/>
         <!--package name="nginx"/-->
