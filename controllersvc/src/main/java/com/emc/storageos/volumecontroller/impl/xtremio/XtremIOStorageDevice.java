@@ -52,12 +52,18 @@ import com.emc.storageos.xtremio.restapi.XtremIOClient;
 import com.emc.storageos.xtremio.restapi.XtremIOClientFactory;
 import com.emc.storageos.xtremio.restapi.XtremIOConstants;
 import com.emc.storageos.xtremio.restapi.XtremIOConstants.XTREMIO_ENTITY_TYPE;
+import com.emc.storageos.xtremio.restapi.errorhandling.XtremIOApiException;
 import com.emc.storageos.xtremio.restapi.model.response.XtremIOConsistencyGroup;
 import com.emc.storageos.xtremio.restapi.model.response.XtremIOVolume;
 
 public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
 
     private static final Logger _log = LoggerFactory.getLogger(XtremIOStorageDevice.class);
+
+    // Maximum number of retries to delete an RP associated XIO volume.
+    private static final int MAX_RETRIES = 50;
+    // Wait 15 seconds before attempting another call to delete the RP associated XIO volume
+    private static final int WAIT_FOR_RETRY = 15000;
 
     XtremIOClientFactory xtremioRestClientFactory;
     DbClient dbClient;
@@ -105,18 +111,18 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
             boolean isCG = false;
             Volume vol = volumes.get(0);
             // If the volume is regular volume and in CG
-            if (!NullColumnValueGetter.isNullURI(vol.getConsistencyGroup())) {                
+            if (!NullColumnValueGetter.isNullURI(vol.getConsistencyGroup())) {
                 cgObj = dbClient.queryObject(BlockConsistencyGroup.class, vol.getConsistencyGroup());
-                if (cgObj != null 
+                if (cgObj != null
                         && cgObj.created(storage.getId())
                         && !vol.checkForRp() && !Volume.checkForVplexBackEndVolume(dbClient, vol)) {
                     // Only set this flag to true if the CG reference is valid
                     // and it is already created on the storage system.
                     // Also, exclude RP volumes and vplex volumes.
                     isCG = true;
-                } 
+                }
             }
-            
+
             // find the project this volume belongs to.
             URI projectUri = volumes.get(0).getProject().getURI();
             String clusterName = client.getClusterDetails(storage.getSerialNumber()).getName();
@@ -157,9 +163,9 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
                     // If it is not, add 1 MB extra to make up the missing bytes due to divide by 1024
                     int amountToAdjustCapacity = 1;
                     if (Volume.checkForProtectedVplexBackendVolume(dbClient, volume) || volume.checkForRp()) {
-                    	amountToAdjustCapacity = 0;
+                        amountToAdjustCapacity = 0;
                     }
-                    
+
                     Long capacityInMB = new Long(volume.getCapacity() / (1024 * 1024) + amountToAdjustCapacity);
                     String capacityInMBStr = String.valueOf(capacityInMB).concat("m");
                     _log.info("Sending create volume request with name: {}, size: {}",
@@ -175,7 +181,7 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
                         // This causes issues with local array snapshots of RP+VPlex volumes.
                         String rpName = volume.getReplicationGroupInstance();
                         if (isCG && !RPHelper.isAssociatedToRpVplexType(volume, dbClient,
-                                        PersonalityTypes.METADATA, PersonalityTypes.TARGET) &&
+                                PersonalityTypes.METADATA, PersonalityTypes.TARGET) &&
                                 NullColumnValueGetter.isNotNullValue(rpName)) {
                             client.addVolumeToConsistencyGroup(volume.getLabel(), cgObj.getLabel(), clusterName);
                         }
@@ -278,27 +284,27 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
                     if (null != XtremIOProvUtils.isVolumeAvailableInArray(client, volume.getLabel(), clusterName)) {
                         // If the volume is regular volume & in CG
                         // i.e. it's not RP or a backend volume for a RP+VPLEX Target or Journal
-                        if (client.isVersion2() && volume.getConsistencyGroup() != null && 
-                        		volume.getReplicationGroupInstance() != null && !volume.checkForRp()
+                        if (client.isVersion2() && volume.getConsistencyGroup() != null &&
+                                volume.getReplicationGroupInstance() != null && !volume.checkForRp()
                                 && !RPHelper.isAssociatedToRpVplexType(volume, dbClient,
                                         PersonalityTypes.METADATA, PersonalityTypes.TARGET)) {
                             BlockConsistencyGroup consistencyGroupObj = dbClient.queryObject(BlockConsistencyGroup.class,
                                     volume.getConsistencyGroup());
                             String cgName = volume.getReplicationGroupInstance();
-                            
+
                             if (null != XtremIOProvUtils.isCGAvailableInArray(client, cgName, clusterName)) {
                                 // first remove the volume from cg if exists on array and then delete
                                 _log.info("Removing the volume {} from consistency group {}", volume.getLabel(),
-                                		cgName);
+                                        cgName);
                                 client.removeVolumeFromConsistencyGroup(volume.getLabel(), cgName, clusterName);
                                 XtremIOConsistencyGroup xioCG = XtremIOProvUtils.isCGAvailableInArray(client,
-                                		cgName, clusterName);
+                                        cgName, clusterName);
                                 // Check if there are no volumes in the CG
                                 if (null == xioCG.getVolList() || xioCG.getVolList().isEmpty()) {
                                     client.removeConsistencyGroup(cgName, clusterName);
                                     _log.info("CG is empty on array. Remove array association from the CG");
                                     consistencyGroupObj.removeSystemConsistencyGroup(storageSystem.getId().toString(),
-                                    		cgName);
+                                            cgName);
                                     // clear the LOCAL type
                                     StringSet types = consistencyGroupObj.getTypes();
                                     if (types != null) {
@@ -310,8 +316,34 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
                                 }
                             }
                         }
-                        _log.info("Deleting the volume {}", volume.getLabel());
-                        client.deleteVolume(volume.getLabel(), clusterName);
+
+                        if (volume.checkForRp()) {
+                            // RecoverPoint requires and creates XIO consistency groups when protecting XIO volumes. When RP protected XIO
+                            // volumes/replication sets are deleted, RP initiates asynchronous calls to remove volumes from an XIO CG or
+                            // delete the XIO CG depending on if the whole RP CG is getting deleted. Because of the asynchronous nature of
+                            // these calls from RP, we have no way of know when the operations are complete. If we attempt to delete an RP
+                            // protected XIO volumes that is still in a CG, we will get an exception. So we need to retry the XIO volume
+                            // delete call until it succeeds or we exhaust our retry attempts.
+                            int attempt = 0;
+                            while (attempt++ <= MAX_RETRIES) {
+                                try {
+                                    _log.info(String.format("Attempt %s/%s to delete volume %s, which is associated with RecoverPoint",
+                                            attempt, MAX_RETRIES, volume.getLabel()));
+                                    client.deleteVolume(volume.getLabel(), clusterName);
+
+                                    // The delete volume call succeeded so exit the retry loop.
+                                    break;
+                                } catch (XtremIOApiException e) {
+                                    _log.warn(String
+                                            .format("Encountered exception attempting to delete RP/XIO volume %s.  Waiting %s milliseconds before trying again.  Error: %s",
+                                                    volume.getLabel(), WAIT_FOR_RETRY, e.getMessage()));
+                                    Thread.sleep(WAIT_FOR_RETRY);
+                                }
+                            }
+                        } else {
+                            _log.info("Deleting the volume {}", volume.getLabel());
+                            client.deleteVolume(volume.getLabel(), clusterName);
+                        }
                     }
                     volume.setInactive(true);
                     volume.setConsistencyGroup(NullColumnValueGetter.getNullURI());
@@ -360,7 +392,7 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
          * using Initiator label. - If not found, POST to IG and use IG-name to POST to Initiator
          * with IG (IG per Host) - If found, find IG - Maintain an in-memory Set of IGs - Lookup
          * Volumes - Create LUNMap foreach (IG, V)
-         * 
+         *
          * 0. Discover Initiators and update the corresponding labels if not set. 0a. If label is
          * not matching with user given, then keep a local data structure in memory and use it only
          * during this process. 1. Look up IG by name and find IGs 2. Store IGs in list 3. If list
@@ -370,8 +402,8 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
          * yes, then add the remaining initiators to the any one of the initiator Group which
          * matches above criteria 5c. Else, create a new initiator group and add the remaining
          * initiators. 6. If complete, no action 7. Create LunMaps for each Volume and IG.
-         * 
-         * 
+         *
+         *
          */
         _log.info("{} doExportGroupCreate START ...", storage.getSerialNumber());
         VolumeURIHLU[] volumeLunArray = ControllerUtils.getVolumeURIHLUArray(
@@ -559,7 +591,8 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
 
     @Override
     public void doDeleteConsistencyGroup(StorageSystem storage, final URI consistencyGroupId,
-            String replicationGroupName, String newReplicationGroupName, Boolean markInactive, final TaskCompleter taskCompleter) throws DeviceControllerException {
+            String replicationGroupName, String newReplicationGroupName, Boolean markInactive, final TaskCompleter taskCompleter)
+            throws DeviceControllerException {
         _log.info("{} doDeleteConsistencyGroup START ...", storage.getSerialNumber());
         try {
             // Check if the consistency group exists
@@ -664,10 +697,10 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
             List<BlockObject> updatedBlockObjects = new ArrayList<BlockObject>();
             for (URI uri : blockObjects) {
                 BlockObject blockObject = BlockObject.fetch(dbClient, uri);
-                if (blockObject != null) {                    
+                if (blockObject != null) {
                     if (blockObject.getClass().isInstance(Volume.class)) {
-                        Volume volume = (Volume)blockObject;
-                        if (volume.checkForRp() 
+                        Volume volume = (Volume) blockObject;
+                        if (volume.checkForRp()
                                 || RPHelper.isAssociatedToRpVplexType(volume, dbClient,
                                         PersonalityTypes.METADATA, PersonalityTypes.TARGET)) {
                             // Do not add RP+VPlex journal or target backing volumes to consistency groups.
@@ -677,7 +710,7 @@ public class XtremIOStorageDevice extends DefaultBlockStorageDevice {
                     }
                     client.addVolumeToConsistencyGroup(blockObject.getLabel(), cgName, clusterName);
                     blockObject.setConsistencyGroup(consistencyGroupId);
-                    updatedBlockObjects.add(blockObject);                    
+                    updatedBlockObjects.add(blockObject);
                 }
             }
             dbClient.updateAndReindexObject(updatedBlockObjects);
