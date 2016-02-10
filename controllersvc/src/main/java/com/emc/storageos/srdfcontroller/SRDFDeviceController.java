@@ -1012,8 +1012,9 @@ public class SRDFDeviceController implements SRDFController, BlockOrchestrationI
             // Add step to resume each Active SRDF group
             for (URI srdfGroupURI : srdfGroupMap.keySet()) {
                 RemoteDirectorGroup group = srdfGroupMap.get(srdfGroupURI);
-                if(srdfGroupToTargetVolumeAccessState.get(srdfGroupURI).equals(Volume.VolumeAccessState.NOT_READY.name())){
-                    log.info("Srdf group {} {} was already in a suspended state hence skipping resume on this group.", srdfGroupURI, group.getNativeGuid());
+                if (srdfGroupToTargetVolumeAccessState.get(srdfGroupURI).equals(Volume.VolumeAccessState.NOT_READY.name())) {
+                    log.info("Srdf group {} {} was already in a suspended state hence skipping resume on this group.", srdfGroupURI,
+                            group.getNativeGuid());
                     continue;
                 }
                 List<URI> sourceVolumes = srdfGroupToSourceVolumeMap.get(srdfGroupURI);

@@ -69,7 +69,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
     /**
      * Maps the StorageSystem (for VPlex, VNX, VMAX) and/or ProtectionSystem (for RP)
      * to the corresponding consistency groups that have been created.
-     *
+     * 
      * Here are the different permutations that can exist based on types:
      * RP: [protectionSystem->cg1]
      * LOCAL: [storageSystem->cg1]
@@ -78,14 +78,14 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
      * RP,VPLEX: [protectionSystem->cg1,storageSystem->[cluster-1:cg1,cluster-2:cg1]]
      */
     private StringSetMap systemConsistencyGroups;
-    
+
     /**
-     * If adding volumes or VPLEX backend volumes to replication group for each volume created 
+     * If adding volumes or VPLEX backend volumes to replication group for each volume created
      * in the consistency group.
      * By default it is set to true. It would be turned to false if one of the volumes in the CG
      * is added to an application (applicable to VPLEX/RP only)
      */
-    private Boolean arrayConsistency =  true;
+    private Boolean arrayConsistency = true;
 
     public static enum Types {
         /* RecoverPoint consistency group type. */
@@ -226,7 +226,6 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
         if (requestedTypes == null || requestedTypes.isEmpty()) {
             return false;
         }
-        
         return requestedTypes.contains(Types.RP.toString()) || requestedTypes.contains(Types.VPLEX.toString());
     }
 
@@ -261,7 +260,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
      * associated consistency groups that have been created,
      * which is indicated by the presence in types. If nothing has been
      * requested yet, we haven't created the consistencyGroup.
-     *
+     * 
      * @return true if the ConsistencyGroup has been created, false otherwise.
      */
     public boolean created() {
@@ -296,7 +295,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
     /**
      * Returns true if CG creation has been initiated or even completed
      * as given by something was recorded in requestedTypes().
-     *
+     * 
      * @return true if CG creation has been initiated.
      */
     public boolean creationInitiated() {
@@ -306,7 +305,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
     /**
      * Check to see if the consistency group has been created for the given
      * storage system.
-     *
+     * 
      * @param storageSystemUri The storage system URI
      * @return true if the consistency group has been created, false otherwise.
      */
@@ -321,11 +320,11 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
         return false;
     }
-    
+
     /**
      * Check to see if the consistency group has been created for the given
      * storage system, and replication group name
-     *
+     * 
      * @param storageSystemUri The storage system URI
      * @param replicationGroupName the replication group name to check on
      * @return true if the consistency group has been created, false otherwise.
@@ -335,15 +334,15 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
                 systemConsistencyGroups != null && !systemConsistencyGroups.isEmpty()) {
             StringSet cgNames = systemConsistencyGroups.get(storageSystemUri.toString());
             if (cgNames != null && !cgNames.isEmpty()) {
-            	if (replicationGroupName != null && !replicationGroupName.isEmpty()) {
-            		if (cgNames.contains(replicationGroupName)) {
-            			return true;
-            		} else {
-            			return false;
-            		}
-            	} else {
-            		return true;
-            	}
+                if (replicationGroupName != null && !replicationGroupName.isEmpty()) {
+                    if (cgNames.contains(replicationGroupName)) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return true;
+                }
             }
         }
 
@@ -352,7 +351,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * Convenience method to add a consistency group type.
-     *
+     * 
      * @param types The types to add to this consistency group.
      */
     public void addConsistencyGroupTypes(String... cgTypes) {
@@ -367,9 +366,9 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * Determines if the consistency group has the passed type.
-     *
+     * 
      * @param type The type to check.
-     *
+     * 
      * @return true when the consistency group has the type, false otherwise.
      */
     public boolean checkForType(Types type) {
@@ -382,7 +381,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * Add a mapping of storage systems to consistency group names.
-     *
+     * 
      * @param systemUri The StorageSystem or ProtectionSystem URI string.
      * @param cgName The consistency group name.
      */
@@ -401,7 +400,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * Remove a mapping of storage system to consistency group name.
-     *
+     * 
      * @param systemUri The StorageSystem or ProtectionSystem URI string.
      * @param cgName The consistency group name.
      */
@@ -440,7 +439,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * checks to see if the CG name matches the name ViPR has stored for the storage system
-     *
+     * 
      * @param cgId id of the CG in the DB
      * @param storageSystemId storage system to check the CG name
      * @param cgParams cg params with CG name
@@ -453,7 +452,7 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
 
     /**
      * Returns the name of the CG on the storage system if ViPR has created this CG on the storage system in the past.
-     *
+     * 
      * @param cgId id of the CG in the ViPR db
      * @param storageSystemId storage system to get the name for
      * @return the CG name or null if ViPR has not created the CG on the storage system
@@ -474,13 +473,13 @@ public class BlockConsistencyGroup extends DataObject implements ProjectResource
     }
 
     @Name("arrayConsistency")
-	public Boolean getArrayConsistency() {
-		return arrayConsistency;
-	}
+    public Boolean getArrayConsistency() {
+        return arrayConsistency;
+    }
 
-	public void setArrayConsistency(Boolean arrayConsistency) {
-		this.arrayConsistency = arrayConsistency;
-		setChanged("arrayConsistency");
-	}
+    public void setArrayConsistency(Boolean arrayConsistency) {
+        this.arrayConsistency = arrayConsistency;
+        setChanged("arrayConsistency");
+    }
 
 }
