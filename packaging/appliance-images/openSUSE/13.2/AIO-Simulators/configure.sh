@@ -1,18 +1,20 @@
 #!/bin/bash
 #
-# Copyright 2016 EMC Corporation
+# Copyright 2015-2016 EMC Corporation
 # All Rights Reserved
 #
 
+function updateOVF
+{
+  OVF=$2
+  DISK=$( grep -oP 'ovf:href="\K[^"]*' ${OVF} )
+  SIZE=$( stat -c %s "$( dirname ${OVF} )/${DISK}" )
 
-SCRIPT=$0
-OVF=$1
-
-cat ${OVF} | head -n -2 > ${OVF}.tmp
-
-sed -i "s|<VirtualHardwareSection>|<VirtualHardwareSection ovf:transport=\"iso,com.vmware.guestInfo\" ovf:required=\"false\">|g" ${OVF}.tmp
-sed -i "s|<vssd:VirtualSystemType>virtualbox-[0-9a-z.]\{1,\}</vssd:VirtualSystemType>|<vssd:VirtualSystemType>vmx-07</vssd:VirtualSystemType>|g" ${OVF}.tmp
-cat >> ${OVF}.tmp <<EOF
+  sed -i "s|ovf:id=\"file1\"|ovf:id=\"file1\" ovf:size=\"${SIZE}\"|g" ${OVF}
+  cat ${OVF} | head -n -2 > ${OVF}.tmp
+  sed -i "s|<VirtualHardwareSection>|<VirtualHardwareSection ovf:transport=\"iso\" ovf:required=\"false\">|g" ${OVF}.tmp
+  sed -i "s|<vssd:VirtualSystemType>virtualbox-[0-9a-z.]\{1,\}</vssd:VirtualSystemType>|<vssd:VirtualSystemType>vmx-07</vssd:VirtualSystemType>|g" ${OVF}.tmp
+  cat >> ${OVF}.tmp <<EOF
     <ProductSection ovf:class="vm" ovf:required="false">
       <Info>VM specific properties</Info>
       <Property ovf:key="vmname" ovf:type="string" ovf:value="SetupVM"/>
@@ -44,6 +46,10 @@ cat >> ${OVF}.tmp <<EOF
         <Label>DNS Server(s) (comma separated)</Label>
         <Description>The IPv4 domain name servers for this VM.</Description>
       </Property>
+      <Property ovf:key="vip" ovf:userConfigurable="true" ovf:type="string">
+        <Label>It will be used as the virtual IP (vip) address for AIO-Simulators (comma separated)</Label>
+        <Description>The IPv4 address for this interface.</Description>
+      </Property>
     </ProductSection>
     <ProductSection ovf:class="system" ovf:required="false">
       <Info>System Properties</Info>
@@ -57,11 +63,11 @@ cat >> ${OVF}.tmp <<EOF
 </Envelope>
 EOF
 
-LINE=$( grep -n "</VirtualHardwareSection>" ${OVF}.tmp | cut -f1 -d: )
-HEAD=$(( LINE-1 ))
-TAIL=$(( LINE+0 ))
-cat ${OVF}.tmp | head -n ${HEAD} > ${OVF}
-cat >> ${OVF} <<EOF
+  LINE=$( grep -n "</VirtualHardwareSection>" ${OVF}.tmp | cut -f1 -d: )
+  HEAD=$(( LINE-1 ))
+  TAIL=$(( LINE+0 ))
+  cat ${OVF}.tmp | head -n ${HEAD} > ${OVF}
+  cat >> ${OVF} <<EOF
       <Item>
         <rasd:AddressOnParent>1</rasd:AddressOnParent>
         <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
@@ -72,5 +78,8 @@ cat >> ${OVF} <<EOF
       </Item>
 EOF
 
-cat ${OVF}.tmp | tail -n +${TAIL} >> ${OVF}
-rm ${OVF}.tmp
+  cat ${OVF}.tmp | tail -n +${TAIL} >> ${OVF}
+  rm ${OVF}.tmp
+}
+
+$1 "$@"

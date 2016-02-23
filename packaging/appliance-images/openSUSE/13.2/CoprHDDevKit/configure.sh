@@ -350,7 +350,10 @@ EOF
 function updateOVF
 {
   OVF=$2
+  DISK=$( grep -oP 'ovf:href="\K[^"]*' ${OVF} )
+  SIZE=$( stat -c %s "$( dirname ${OVF} )/${DISK}" )
 
+  sed -i "s|ovf:id=\"file1\"|ovf:id=\"file1\" ovf:size=\"${SIZE}\"|g" ${OVF}
   cat ${OVF} | head -n -2 > ${OVF}.tmp
   sed -i "s|<VirtualHardwareSection>|<VirtualHardwareSection ovf:transport=\"iso\" ovf:required=\"false\">|g" ${OVF}.tmp
   sed -i "s|<vssd:VirtualSystemType>virtualbox-[0-9a-z.]\{1,\}</vssd:VirtualSystemType>|<vssd:VirtualSystemType>vmx-07</vssd:VirtualSystemType>|g" ${OVF}.tmp
