@@ -40,9 +40,9 @@
         &nbsp;
       </dd>        
       <dt>&{'resources.filesystem.varray'}:</dt>
-      <dd><img src="/public/img/serviceCatalog/Virtual_Array.png" style="width: 32px;"/> #{spaceForNull virtualArray?.name/}</dd>
+      <dd><img src="/public/img/serviceCatalog/Virtual_Array.png" style="width: 32px;"/> <a href="@{VirtualArrays.edit(fileSystem.varray.id.toString())}">#{spaceForNull virtualArray?.name/}</a></dd>
       <dt>&{'resources.filesystem.vpool'}:</dt>
-      <dd><img src="/public/img/serviceCatalog/Virtual_Pool.png" style="width: 32px;"/> #{spaceForNull virtualPool?.name/}</dd>
+      <dd><img src="/public/img/serviceCatalog/Virtual_Pool.png" style="width: 32px;"/> <a href="@{arrays.FileVirtualPools.edit(fileSystem.vpool.id.toString())}">#{spaceForNull virtualPool?.name/}</a></dd>
       #{deadbolt.restrict roles:[['SYSTEM_ADMIN'], ['RESTRICTED_SYSTEM_ADMIN']]}
         <dt class="moreDetails">&{'resources.filesystem.storagesystem'}:</dt>
         <dd class="moreDetails">#{spaceForNull storageSystem?.name/}</dd>
